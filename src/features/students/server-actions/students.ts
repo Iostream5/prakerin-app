@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/src/lib/supabase/server";
 import { getAuthzContext } from "@/src/lib/rbac";
+import { AccessDeniedError, assertRouteAccess } from "@/src/lib/authorization";
 import type {
   CreateStudentInput,
   ListStudentsParams,
@@ -63,35 +64,24 @@ function fail<T>(
   };
 }
 
-function hasAnyPermission(
-  permissions: Set<string>,
-  candidates: readonly string[]
-): boolean {
-  if (permissions.has("*") || permissions.has("dashboard.*") || permissions.has("dashboard:all")) {
-    return true;
-  }
-
-  return candidates.some((code) => permissions.has(code));
-}
-
 async function ensureStudentsReadAccess() {
   const authz = await getAuthzContext();
-  const canReadByRole = authz.roles.has("hubdin") || authz.roles.has("operator");
-  const canReadByPermission = hasAnyPermission(authz.permissions, READ_PERMISSION_CODES);
-
-  if (!canReadByRole && !canReadByPermission) {
-    throw new Error("FORBIDDEN");
-  }
+  assertRouteAccess({
+    roles: authz.roles,
+    permissions: authz.permissions,
+    requiredRoles: ["hubdin", "operator"],
+    requiredPermissions: READ_PERMISSION_CODES,
+  });
 }
 
 async function ensureStudentsWriteAccess() {
   const authz = await getAuthzContext();
-  const canWriteByRole = authz.roles.has("hubdin") || authz.roles.has("operator");
-  const canWriteByPermission = hasAnyPermission(authz.permissions, WRITE_PERMISSION_CODES);
-
-  if (!canWriteByRole && !canWriteByPermission) {
-    throw new Error("FORBIDDEN");
-  }
+  assertRouteAccess({
+    roles: authz.roles,
+    permissions: authz.permissions,
+    requiredRoles: ["hubdin", "operator"],
+    requiredPermissions: WRITE_PERMISSION_CODES,
+  });
 }
 
 function normalizeString(value: string | null | undefined): string | null {
@@ -258,7 +248,7 @@ export async function listStudents(
       count: count ?? 0,
     });
   } catch (error) {
-    if (error instanceof Error && error.message === "FORBIDDEN") {
+    if (error instanceof AccessDeniedError) {
       return fail("FORBIDDEN", "You do not have access to read students data.");
     }
 
@@ -295,7 +285,7 @@ export async function getStudentById(
 
     return ok(parseStudentRow(data));
   } catch (error) {
-    if (error instanceof Error && error.message === "FORBIDDEN") {
+    if (error instanceof AccessDeniedError) {
       return fail("FORBIDDEN", "You do not have access to read student data.");
     }
 
@@ -327,11 +317,11 @@ export async function createStudent(
     revalidateStudentPages();
     return ok(parseStudentRow(data));
   } catch (error) {
-    if (error instanceof Error && error.message === "FORBIDDEN") {
+    if (error instanceof AccessDeniedError) {
       return fail("FORBIDDEN", "You do not have access to create student data.");
     }
 
-    if (error instanceof Error && error.message !== "FORBIDDEN") {
+    if (error instanceof Error) {
       return fail("VALIDATION_ERROR", error.message);
     }
 
@@ -370,11 +360,11 @@ export async function updateStudent(
     revalidateStudentPages();
     return ok(parseStudentRow(data));
   } catch (error) {
-    if (error instanceof Error && error.message === "FORBIDDEN") {
+    if (error instanceof AccessDeniedError) {
       return fail("FORBIDDEN", "You do not have access to update student data.");
     }
 
-    if (error instanceof Error && error.message !== "FORBIDDEN") {
+    if (error instanceof Error) {
       return fail("VALIDATION_ERROR", error.message);
     }
 
@@ -410,7 +400,7 @@ export async function deleteStudent(
     revalidateStudentPages();
     return ok({ id: (data as { id: string }).id });
   } catch (error) {
-    if (error instanceof Error && error.message === "FORBIDDEN") {
+    if (error instanceof AccessDeniedError) {
       return fail("FORBIDDEN", "You do not have access to delete student data.");
     }
 

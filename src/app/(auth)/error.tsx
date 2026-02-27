@@ -1,4 +1,6 @@
-﻿"use client";
+"use client";
+
+import { RouteError } from "@/src/components/RouteError";
 
 type Props = {
   error: Error;
@@ -6,7 +8,5 @@ type Props = {
 };
 
 export default function ErrorPage({ error, reset }: Props) {
-  void error;
-  void reset;
-  return null;
+  return <RouteError title="Authentication" error={error} reset={reset} />;
 }

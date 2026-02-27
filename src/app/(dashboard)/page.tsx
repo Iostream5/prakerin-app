@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import {
   getCurrentProfile,
   getCurrentUser,
@@ -16,7 +17,7 @@ export default async function Page() {
   ]);
 
   if (!user) {
-    return null;
+    redirect("/login");
   }
 
   const displayName =
